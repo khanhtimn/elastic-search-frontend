@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import {
     getIndices,
     createIndex,
-    deleteIndex
+    deleteIndex,
+    getDocumentsByIndex
 } from "../services/api";
-import { Database, RefreshCw, AlertCircle, Plus } from "lucide-react";
+import { Database, RefreshCw, AlertCircle, Plus, Trash2, FolderOpen, X, FileText } from "lucide-react";
+import ResultTable from "../components/ResultTable";
 
 export default function IndicesPage() {
     const [indices, setIndices] = useState<string[]>([]);
@@ -12,6 +14,12 @@ export default function IndicesPage() {
     const [error, setError] = useState<string | null>(null);
     const [newIndexName, setNewIndexName] = useState("");
     const [creating, setCreating] = useState(false);
+    const [deleting, setDeleting] = useState<string | null>(null);
+
+    // Document Viewing State
+    const [selectedIndex, setSelectedIndex] = useState<string | null>(null);
+    const [indexDocuments, setIndexDocuments] = useState<any[]>([]);
+    const [loadingDocs, setLoadingDocs] = useState(false);
 
     const fetchIndices = async () => {
         try {
@@ -20,7 +28,7 @@ export default function IndicesPage() {
             const data = await getIndices();
             setIndices(data);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to fetch indices");
+            setError(err instanceof Error ? err.message : "Không thể tải danh sách index");
         } finally {
             setLoading(false);
         }
@@ -34,16 +42,41 @@ export default function IndicesPage() {
             setNewIndexName("");
             fetchIndices();
         } else {
-            alert("Failed to create index");
+            alert("Tạo index thất bại");
         }
         setCreating(false);
     };
 
-    const handleDeleteIndex = async (index: string) => {
-        if (!confirm(`Delete index "${index}"? This cannot be undone!`)) return;
+    const handleDeleteIndex = async (index: string, e: React.MouseEvent) => {
+        e.stopPropagation(); // Prevent opening the modal
+        if (!confirm(`Bạn có chắc chắn muốn xóa index "${index}"? Hành động này không thể hoàn tác!`)) return;
+        setDeleting(index);
         const success = await deleteIndex(index);
-        if (success) fetchIndices();
-        else alert("Failed to delete index");
+        setDeleting(null);
+        if (success) {
+            fetchIndices();
+            if (selectedIndex === index) setSelectedIndex(null);
+        } else {
+            alert("Xóa index thất bại");
+        }
+    };
+
+    const handleIndexClick = async (index: string) => {
+        setSelectedIndex(index);
+        setLoadingDocs(true);
+        setIndexDocuments([]);
+        try {
+            const docs = await getDocumentsByIndex(index);
+            setIndexDocuments(docs);
+        } catch (error) {
+            console.error("Failed to fetch documents for index", index, error);
+        } finally {
+            setLoadingDocs(false);
+        }
+    };
+
+    const handleRefreshDocs = () => {
+        if (selectedIndex) handleIndexClick(selectedIndex);
     };
 
     useEffect(() => {
@@ -51,95 +84,135 @@ export default function IndicesPage() {
     }, []);
 
     return (
-        <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
-            {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
-                        <Database className="w-6 h-6 text-white" />
+        <div className="space-y-6 animate-in fade-in duration-500 relative">
+            {/* Header / Actions */}
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+                <div className="flex items-center gap-4 w-full md:w-auto">
+                    <div className="p-3 bg-blue-50 rounded-xl">
+                        <Database className="w-6 h-6 text-blue-600" />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-bold text-white">Elasticsearch Indices</h2>
-                        <p className="text-blue-100 text-sm mt-0.5">
-                            {loading ? "Loading..." : `${indices.length} indices found`}
-                        </p>
+                        <h2 className="text-xl font-bold text-slate-800">Quản lý Index</h2>
+                        <p className="text-sm text-slate-500">Quản lý các index trong Elasticsearch</p>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
-                    <input
-                        type="text"
-                        placeholder="New index name"
-                        value={newIndexName}
-                        onChange={(e) => setNewIndexName(e.target.value)}
-                        className="px-3 py-1 rounded-lg border border-slate-300 focus:outline-none focus:ring-2 focus:ring-blue-400"
-                    />
-                    <button
-                        onClick={handleCreateIndex}
-                        disabled={creating || !newIndexName.trim()}
-                        className="flex items-center gap-1 px-3 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Plus className="w-4 h-4" />
-                        {creating ? "Creating..." : "Create"}
-                    </button>
+
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                    <div className="relative flex-1 md:w-64">
+                        <input
+                            type="text"
+                            placeholder="New index name..."
+                            value={newIndexName}
+                            onChange={(e) => setNewIndexName(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleCreateIndex()}
+                            className="w-full pl-4 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-blue-400 transition-all outline-none"
+                        />
+                        <button
+                            onClick={handleCreateIndex}
+                            disabled={creating || !newIndexName.trim()}
+                            className="absolute right-1.5 top-1.5 p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:bg-slate-300"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
+                    </div>
+
                     <button
                         onClick={fetchIndices}
                         disabled={loading}
-                        className="p-2 bg-white/20 hover:bg-white/30 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Refresh indices"
+                        className="p-2.5 bg-slate-50 hover:bg-white border border-slate-200 hover:border-slate-300 rounded-xl transition-all"
+                        title="Refresh"
                     >
-                        <RefreshCw className={`w-5 h-5 text-white ${loading ? "animate-spin" : ""}`} />
+                        <RefreshCw className={`w-5 h-5 text-slate-600 ${loading ? "animate-spin" : ""}`} />
                     </button>
                 </div>
             </div>
 
-            {/* Content */}
-            <div className="p-6">
+            {/* List */}
+            <div className="min-h-[300px]">
                 {loading && indices.length === 0 ? (
-                    <div className="flex items-center justify-center py-12">
-                        <div className="text-center">
-                            <RefreshCw className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-3" />
-                            <p className="text-slate-600">Loading indices...</p>
-                        </div>
+                    <div className="flex items-center justify-center h-64">
+                        <RefreshCw className="w-8 h-8 text-blue-500 animate-spin" />
                     </div>
                 ) : error ? (
-                    <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl">
-                        <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                        <div>
-                            <p className="font-semibold text-red-800">Error loading indices</p>
-                            <p className="text-sm text-red-600 mt-1">{error}</p>
-                        </div>
+                    <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-red-700 flex items-center gap-2">
+                        <AlertCircle className="w-5 h-5" />
+                        {error}
                     </div>
                 ) : indices.length === 0 ? (
-                    <div className="text-center py-12">
-                        <Database className="w-16 h-16 text-slate-300 mx-auto mb-3" />
-                        <p className="text-slate-600 font-medium">No indices found</p>
-                        <p className="text-slate-400 text-sm mt-1">Create an index to get started</p>
+                    <div className="text-center py-20 bg-slate-50/50 rounded-2xl border-2 border-dashed border-slate-200">
+                        <FolderOpen className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                        <h3 className="text-lg font-medium text-slate-700">Không tìm thấy index nào</h3>
+                        <p className="text-slate-500">Hãy tạo index đầu tiên để bắt đầu</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {indices.map((idx, i) => (
                             <div
                                 key={idx}
-                                className="group relative px-4 py-3 bg-gradient-to-br from-slate-50 to-blue-50 hover:from-blue-50 hover:to-blue-100 border border-slate-200 hover:border-blue-300 rounded-xl text-sm font-medium text-slate-700 hover:text-blue-900 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer"
+                                onClick={() => handleIndexClick(idx)}
+                                className="group relative bg-white p-5 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-200 transition-all duration-300 cursor-pointer"
+                                style={{ animationDelay: `${i * 100}ms` }}
                             >
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <div className="w-2 h-2 rounded-full bg-green-500 group-hover:bg-blue-600 transition-colors duration-300"></div>
-                                        <span className="truncate">{idx}</span>
+                                <div className="flex items-start justify-between mb-4">
+                                    <div className="w-10 h-10 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-full flex items-center justify-center text-blue-600">
+                                        <Database className="w-5 h-5" />
                                     </div>
                                     <button
-                                        onClick={() => handleDeleteIndex(idx)}
-                                        className="text-red-500 hover:text-red-700"
-                                        title="Delete index"
+                                        onClick={(e) => handleDeleteIndex(idx, e)}
+                                        disabled={deleting === idx}
+                                        className="text-slate-300 hover:text-red-500 transition-colors p-1"
                                     >
-                                        ✕
+                                        {deleting === idx ? (
+                                            <RefreshCw className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Trash2 className="w-4 h-4" />
+                                        )}
                                     </button>
                                 </div>
+                                <h3 className="font-bold text-slate-800 text-lg mb-1 truncate" title={idx}>{idx}</h3>
+                                <p className="text-xs text-slate-400 font-mono">Bấm để xem tài liệu</p>
+
+                                <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-blue-500 to-indigo-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 rounded-b-2xl"></div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
+
+            {/* Document Viewer Modal */}
+            {selectedIndex && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white w-full max-w-5xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+                        {/* Modal Header */}
+                        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2 bg-blue-100/50 rounded-lg text-blue-600">
+                                    <FileText className="w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-800">Nội dung Index: {selectedIndex}</h3>
+                                    <p className="text-xs text-slate-500">{indexDocuments.length} tài liệu được tải</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={() => setSelectedIndex(null)}
+                                className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-500"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Modal Body */}
+                        <div className="flex-1 overflow-y-auto p-6 bg-slate-50/30">
+                            <ResultTable
+                                results={indexDocuments}
+                                onRefresh={handleRefreshDocs}
+                                loading={loadingDocs}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
