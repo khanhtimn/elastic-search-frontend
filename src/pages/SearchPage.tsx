@@ -6,13 +6,15 @@ import { searchElastic } from "../services/api";
 import { Search, AlertCircle, Sparkles } from "lucide-react";
 
 export default function SearchPage() {
-    const [results, setResults] = useState<Array<{
-        _index: string;
-        _id: string;
-        _score: number;
-        _source: Record<string, unknown>;
-        highlight?: Record<string, string[]>;
-    }>>([]);
+    const [searchData, setSearchData] = useState<{
+        hits: any[];
+        total: number;
+        aggregations: any;
+    }>({
+        hits: [],
+        total: 0,
+        aggregations: {}
+    });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
@@ -28,11 +30,11 @@ export default function SearchPage() {
             setLastQuery(query);
 
             const data = await searchElastic(query);
-            setResults(data);
+            setSearchData(data);
         } catch (err) {
             setError(err instanceof Error ? err.message : "Tìm kiếm thất bại");
             console.error(err);
-            setResults([]);
+            setSearchData({ hits: [], total: 0, aggregations: {} });
         } finally {
             setLoading(false);
         }
@@ -52,10 +54,10 @@ export default function SearchPage() {
                     <Sparkles className="w-6 h-6 text-primary-600" />
                 </div>
                 <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700">
-                    Tìm kiếm Tin tức quân sự
+                    Tìm kiếm Tin tức chiến tranh
                 </h1>
                 <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-                    Tìm kiếm thông minh với hỗ trợ tiếng Việt có dấu và không dấu.
+                    Hệ thống hỗ trợ tìm kiếm thông tin về tin tức chiến tranh
                 </p>
 
                 <div className="flex justify-center pt-2">
@@ -83,10 +85,11 @@ export default function SearchPage() {
             {hasSearched && !error && (
                 <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
                     <ResultTable
-                        results={results}
+                        results={searchData.hits}
                         onRefresh={handleRefresh}
                         loading={loading}
                         query={lastQuery}
+                        total={searchData.total}
                     />
                 </div>
             )}

@@ -10,6 +10,7 @@ type ResultTableProps = {
     onRefresh: () => void;
     loading?: boolean;
     query?: string;
+    total?: number;
 };
 
 // Type for search results with highlight
@@ -33,7 +34,7 @@ function isSearchHit(hit: SearchHit | DocumentHit): hit is SearchHit {
     return '_score' in hit && hit._score !== null && hit._score !== undefined;
 }
 
-export default function ResultTable({ results, onRefresh, loading = false, query = "" }: ResultTableProps) {
+export default function ResultTable({ results, onRefresh, loading = false, query = "", total }: ResultTableProps) {
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
@@ -41,7 +42,8 @@ export default function ResultTable({ results, onRefresh, loading = false, query
     const { openDocumentDetail, openExplainModal } = useModal();
 
     // Find max score for normalization
-    const maxScore = Math.max(...results.filter(isSearchHit).map(doc => doc._score), 1);
+    const safeResults = Array.isArray(results) ? results : [];
+    const maxScore = Math.max(...safeResults.filter(isSearchHit).map(doc => doc._score), 1);
 
     const handleDelete = async (index: string, id: string) => {
         if (confirm("Bạn có chắc chắn muốn xóa tài liệu này không?")) {
@@ -137,7 +139,7 @@ export default function ResultTable({ results, onRefresh, loading = false, query
                         <Database className="w-4 h-4 text-primary-500" />
                         Kết quả tìm kiếm
                         <span className="bg-primary-100 text-primary-700 text-xs py-0.5 px-2 rounded-full ml-2">
-                            {results.length}
+                            {total !== undefined ? total : results.length}
                         </span>
                     </h3>
                     {query && (

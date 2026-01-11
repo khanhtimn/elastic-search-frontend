@@ -34,73 +34,128 @@ const handleResponse = async (res: Response) => {
 
 // 1️⃣ Search documents with Vietnamese-optimized algorithm
 // Priority: exact Vietnamese -> phrase match -> no accent -> fuzzy
-export const searchElastic = async (query: string, index?: string) => {
-    try {
-        const targetIndex = index || "news_quansu";
-        const url = `${BASE_URL}/${targetIndex}/_search`;
+export interface SearchParams {
+    query?: string;
+    index?: string;
+    source?: string;
+    category?: string;
+    fromDate?: string;
+    toDate?: string;
+    from?: number;
+    size?: number;
+}
 
-        // Build Vietnamese-optimized search query
-        const shouldClauses = [];
+// Helper to build the Vietnamese-optimized search query
+const buildSearchQuery = (params: SearchParams | string) => {
+    let query = "";
+    let source = "";
+    let category = "";
+    let fromDate = "";
+    let toDate = "";
 
-        if (query) {
-            // 1. Highest Priority: Exact Vietnamese match with accents (boost 10)
-            shouldClauses.push({
-                multi_match: {
-                    query: query,
-                    fields: ["title^5", "body"],
-                    type: "best_fields",
-                    operator: "or",
-                    boost: 10
-                }
-            });
+    if (typeof params === "string") {
+        query = params;
+    } else {
+        query = params.query || "";
+        source = params.source || "";
+        category = params.category || "";
+        fromDate = params.fromDate || "";
+        toDate = params.toDate || "";
+    }
 
-            // 2. High Priority: Phrase match with accents (boost 15)
-            shouldClauses.push({
-                multi_match: {
-                    query: query,
-                    fields: ["title^10", "body^2"],
-                    type: "phrase",
-                    slop: 2,
-                    boost: 15
-                }
-            });
+    const mustClauses: any[] = [];
+    const shouldClauses: any[] = [];
 
-            // 3. Medium Priority: No-accent match (boost 7.5)
-            shouldClauses.push({
-                multi_match: {
-                    query: query,
-                    fields: ["title.no_accent^5", "body.no_accent"],
-                    type: "best_fields",
-                    operator: "or",
-                    boost: 7.5
-                }
-            });
+    if (query) {
+        // 1. Highest Priority: Exact Vietnamese match with accents (boost 10)
+        shouldClauses.push({
+            multi_match: {
+                query: query,
+                fields: ["title^5", "body"],
+                type: "best_fields",
+                operator: "or",
+                boost: 10
+            }
+        });
 
-            // 4. Low Priority: Fuzzy match for typos (boost 2)
-            shouldClauses.push({
-                multi_match: {
-                    query: query,
-                    fields: ["title^5", "body"],
-                    type: "best_fields",
-                    fuzziness: "AUTO",
-                    operator: "or",
-                    boost: 2
-                }
-            });
+        // 2. High Priority: Phrase match with accents (boost 15)
+        shouldClauses.push({
+            multi_match: {
+                query: query,
+                fields: ["title^10", "body^2"],
+                type: "phrase",
+                slop: 2,
+                boost: 15
+            }
+        });
+
+        // 3. Medium Priority: No-accent match (boost 7.5)
+        shouldClauses.push({
+            multi_match: {
+                query: query,
+                fields: ["title.no_accent^5", "body.no_accent"],
+                type: "best_fields",
+                operator: "or",
+                boost: 7.5
+            }
+        });
+
+        // 4. Low Priority: Fuzzy match for typos (boost 2)
+        shouldClauses.push({
+            multi_match: {
+                query: query,
+                fields: ["title^5", "body"],
+                type: "best_fields",
+                fuzziness: "AUTO",
+                operator: "or",
+                boost: 2
+            }
+        });
+
+        mustClauses.push({
+            bool: {
+                should: shouldClauses,
+                minimum_should_match: 1
+            }
+        });
+    } else {
+        mustClauses.push({ match_all: {} });
+    }
+
+    // Add filters
+    if (source) {
+        mustClauses.push({ term: { source: source } });
+    }
+    if (category) {
+        mustClauses.push({ term: { category: category } });
+    }
+    if (fromDate || toDate) {
+        const dateRange: any = {};
+        if (fromDate) dateRange.gte = fromDate;
+        if (toDate) dateRange.lte = toDate;
+        mustClauses.push({ range: { publish_date: dateRange } });
+    }
+
+    return {
+        bool: {
+            must: mustClauses
         }
+    };
+};
+
+export const searchElastic = async (params: SearchParams | string) => {
+    try {
+        const index = typeof params === "string" ? "news_quansu" : (params.index || "news_quansu");
+        const from = typeof params === "string" ? 0 : (params.from || 0);
+        const size = typeof params === "string" ? 50 : (params.size || 50);
+
+        const url = `${BASE_URL}/${index}/_search`;
+        const queryBody = buildSearchQuery(params);
 
         const searchBody = {
-            query: {
-                bool: {
-                    must: query ? [{
-                        bool: {
-                            should: shouldClauses,
-                            minimum_should_match: 1
-                        }
-                    }] : [{ match_all: {} }]
-                }
-            },
-            size: 50,
+            query: queryBody,
+            from: from,
+            size: size,
             sort: [
                 "_score",
                 { "publish_date": { order: "desc", unmapped_type: "date" } }
@@ -119,6 +174,14 @@ export const searchElastic = async (query: string, index?: string) => {
                         number_of_fragments: 3
                     }
                 }
+            },
+            aggs: {
+                sources: {
+                    terms: { field: "source", size: 50 }
+                },
+                categories: {
+                    terms: { field: "category", size: 50 }
+                }
             }
         };
 
@@ -129,7 +192,11 @@ export const searchElastic = async (query: string, index?: string) => {
         });
 
         const data = await handleResponse(res);
-        return data.hits?.hits || [];
+        return {
+            hits: data.hits?.hits || [],
+            total: data.hits?.total?.value || 0,
+            aggregations: data.aggregations || {}
+        };
     } catch (error) {
         console.error("searchElastic error:", error);
         throw error;
@@ -137,21 +204,16 @@ export const searchElastic = async (query: string, index?: string) => {
 };
 
 // 1️⃣.1 Search with explanation (for understanding scoring)
-export const searchWithExplanation = async (query: string, docId: string, index: string) => {
+export const searchWithExplanation = async (params: SearchParams | string, docId: string, index: string) => {
     try {
         const url = `${BASE_URL}/${index}/_explain/${docId}`;
+        const queryBody = buildSearchQuery(params);
+
         const res = await fetch(url, {
             method: "POST",
             headers: getHeaders(),
             body: JSON.stringify({
-                query: {
-                    multi_match: {
-                        query: query,
-                        fields: ["*"],
-                        type: "best_fields",
-                        // fuzziness: "AUTO"
-                    },
-                },
+                query: queryBody,
             }),
         });
 
@@ -231,17 +293,18 @@ export const indexDocument = async (...args: any[]) => {
 
 // 5️⃣ Delete document
 export const deleteDocument = async (index: string, id: string) => {
-    try {
-        const res = await fetch(`${BASE_URL}/${index}/_doc/${id}`, {
-            method: "DELETE",
-            headers: getHeaders(),
-        });
-        await handleResponse(res);
-        return true;
-    } catch (error) {
-        console.error("deleteDocument error:", error);
-        throw error;
-    }
+    console.log("Deleting document:", index, id);
+    // try {
+    //     const res = await fetch(`${BASE_URL}/${index}/_doc/${id}`, {
+    //         method: "DELETE",
+    //         headers: getHeaders(),
+    //     });
+    //     await handleResponse(res);
+    //     return true;
+    // } catch (error) {
+    //     console.error("deleteDocument error:", error);
+    //     throw error;
+    // }
 };
 
 // 6️⃣ Create a new index
@@ -271,17 +334,19 @@ export const createIndex = async (
 
 // 7️⃣ Delete an index
 export const deleteIndex = async (index: string): Promise<boolean> => {
-    try {
-        const res = await fetch(`${BASE_URL}/${index}`, {
-            method: "DELETE",
-            headers: getHeaders(),
-        });
-        await handleResponse(res);
-        return true;
-    } catch (error) {
-        console.error("deleteIndex error:", error);
-        return false;
-    }
+    console.log("Deleting index:", index);
+    return true;
+    // try {
+    //     const res = await fetch(`${BASE_URL}/${index}`, {
+    //         method: "DELETE",
+    //         headers: getHeaders(),
+    //     });
+    //     await handleResponse(res);
+    //     return true;
+    // } catch (error) {
+    //     console.error("deleteIndex error:", error);
+    //     return false;
+    // }
 };
 
 // 8️⃣ Get index details

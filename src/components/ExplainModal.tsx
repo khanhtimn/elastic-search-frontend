@@ -130,85 +130,101 @@ export default function ExplainModal({
                                 {/* Main Formula */}
                                 <div className="bg-white rounded-xl p-4 border border-violet-200 mb-4">
                                     <div className="text-center font-mono">
-                                        <div className="text-lg text-slate-700 mb-2">
-                                            <span className="text-violet-600 font-bold">Điểm cuối cùng</span> = ∑(điểm₁ + điểm₂ + điểm₃ + điểm₄)
+                                        <div className="text-lg text-slate-700 mb-2 leading-relaxed">
+                                            <span className="text-violet-600 font-bold">Điểm tổng</span> = <span className="text-indigo-600">Search_Score</span> + <span className="text-emerald-600">Filter_Score</span>
                                         </div>
-                                        <div className="text-sm text-slate-500">
-                                            trong đó mỗi điểmᵢ = BM25(query, doc) × boost × field_weight
+                                        <div className="text-sm text-slate-500 space-y-1">
+                                            <div><span className="text-indigo-600">Search_Score</span> = ∑ (Exact + Phrase + NoAccent + Fuzzy)</div>
+                                            <div><span className="text-emerald-600">Filter_Score</span> = ∑ (Source + Category + Date Range) match? 1 : 0</div>
                                         </div>
                                     </div>
                                 </div>
 
                                 <p className="text-sm text-violet-700 mb-4">
-                                    Thuật toán sử dụng 4 loại tìm kiếm với độ ưu tiên khác nhau. Elasticsearch tính tổng điểm của tất cả các điều kiện match.
+                                    Hệ thống sử dụng truy vấn <strong>bool.must</strong>, kết hợp điểm từ thuật toán tìm kiếm và các bộ lọc được áp dụng.
                                 </p>
                             </div>
 
-                            {/* 4 Priority Levels */}
+                            {/* Priority Levels */}
                             <div className="space-y-3">
-                                <h4 className="font-semibold text-slate-800">4 mức độ ưu tiên tìm kiếm</h4>
+                                <h4 className="font-semibold text-slate-800 flex items-center gap-2">
+                                    <TrendingUp className="w-4 h-4 text-primary-500" />
+                                    Các thành phần Search_Score
+                                </h4>
 
-                                {/* Priority 1 - Phrase Match */}
-                                <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-xl p-4 border border-rose-200">
+                                {/* Priority 1 - Exact Vietnamese */}
+                                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-4 border border-indigo-200">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="font-semibold text-rose-700">1. Phrase Match (Cụm từ)</span>
-                                        <span className="font-mono bg-rose-100 text-rose-700 px-2 py-1 rounded text-sm">boost = 15</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-6 h-6 rounded-full bg-indigo-600 text-white text-[10px] flex items-center justify-center font-bold">1</span>
+                                            <span className="font-semibold text-indigo-700">Match có dấu chính xác</span>
+                                        </div>
+                                        <span className="font-mono bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-sm font-bold">boost: 10</span>
                                     </div>
-                                    <div className="bg-white rounded-lg p-3 font-mono text-sm mb-2">
-                                        <span className="text-slate-600">điểm = BM25 × </span>
-                                        <span className="text-rose-600 font-bold">15</span>
-                                        <span className="text-slate-600"> × (title×10 + body×2)</span>
+                                    <div className="bg-white rounded-lg p-3 font-mono text-sm mb-2 border border-indigo-100/50">
+                                        <span className="text-slate-600">score = BM25 × </span>
+                                        <span className="text-indigo-600 font-bold">10</span>
+                                        <span className="text-slate-600"> × max(title×5, body×1)</span>
                                     </div>
-                                    <p className="text-xs text-rose-600">
-                                        Match cả cụm từ liên tiếp, cho phép slop=2 (2 từ chen giữa)
+                                    <p className="text-xs text-indigo-600">
+                                        Ưu tiên tìm từ khóa có dấu tiếng Việt chính xác. Sử dụng <strong>best_fields</strong> để lấy điểm từ trường tốt nhất.
                                     </p>
                                 </div>
 
-                                {/* Priority 2 - Exact Vietnamese */}
-                                <div className="bg-gradient-to-r from-indigo-50 to-blue-50 rounded-xl p-4 border border-indigo-200">
+                                {/* Priority 2 - Phrase Match */}
+                                <div className="bg-gradient-to-r from-rose-50 to-pink-50 rounded-xl p-4 border border-rose-200">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="font-semibold text-indigo-700">2. Match có dấu chính xác</span>
-                                        <span className="font-mono bg-indigo-100 text-indigo-700 px-2 py-1 rounded text-sm">boost = 10</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-6 h-6 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center font-bold">2</span>
+                                            <span className="font-semibold text-rose-700">Phrase Match (Cụm từ)</span>
+                                        </div>
+                                        <span className="font-mono bg-rose-100 text-rose-700 px-2 py-1 rounded text-sm font-bold">boost: 15</span>
                                     </div>
-                                    <div className="bg-white rounded-lg p-3 font-mono text-sm mb-2">
-                                        <span className="text-slate-600">điểm = BM25 × </span>
-                                        <span className="text-indigo-600 font-bold">10</span>
-                                        <span className="text-slate-600"> × (title×5 + body×1)</span>
+                                    <div className="bg-white rounded-lg p-3 font-mono text-sm mb-2 border border-rose-100/50">
+                                        <span className="text-slate-600">score = BM25 × </span>
+                                        <span className="text-rose-600 font-bold">15</span>
+                                        <span className="text-slate-600"> × max(title×10, body×2)</span>
                                     </div>
-                                    <p className="text-xs text-indigo-600">
-                                        Tìm từ khóa có dấu tiếng Việt chính xác như nhập vào
+                                    <p className="text-xs text-rose-600 italic">
+                                        Match cụm từ liên tiếp (slop=2), trọng số tiêu đề rất cao (x10).
                                     </p>
                                 </div>
 
                                 {/* Priority 3 - No Accent */}
                                 <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl p-4 border border-amber-200">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="font-semibold text-amber-700">3. Match không dấu</span>
-                                        <span className="font-mono bg-amber-100 text-amber-700 px-2 py-1 rounded text-sm">boost = 7.5</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-6 h-6 rounded-full bg-amber-600 text-white text-[10px] flex items-center justify-center font-bold">3</span>
+                                            <span className="font-semibold text-amber-700">Match không dấu</span>
+                                        </div>
+                                        <span className="font-mono bg-amber-100 text-amber-700 px-2 py-1 rounded text-sm font-bold">boost: 7.5</span>
                                     </div>
-                                    <div className="bg-white rounded-lg p-3 font-mono text-sm mb-2">
-                                        <span className="text-slate-600">điểm = BM25 × </span>
+                                    <div className="bg-white rounded-lg p-3 font-mono text-sm mb-2 border border-amber-100/50">
+                                        <span className="text-slate-600">score = BM25 × </span>
                                         <span className="text-amber-600 font-bold">7.5</span>
-                                        <span className="text-slate-600"> × (title.no_accent×5 + body.no_accent×1)</span>
+                                        <span className="text-slate-600"> × max(title.no_accent×5, body.no_accent×1)</span>
                                     </div>
                                     <p className="text-xs text-amber-600">
-                                        Sử dụng ASCII folding: "chiến tranh" → "chien tranh"
+                                        Hỗ trợ tìm kiếm khi không gõ dấu. VD: "quân sự" match "quan su".
                                     </p>
                                 </div>
 
                                 {/* Priority 4 - Fuzzy */}
                                 <div className="bg-gradient-to-r from-slate-50 to-gray-100 rounded-xl p-4 border border-slate-200">
                                     <div className="flex items-center justify-between mb-2">
-                                        <span className="font-semibold text-slate-700">4. Fuzzy Match (Sai chính tả)</span>
-                                        <span className="font-mono bg-slate-200 text-slate-700 px-2 py-1 rounded text-sm">boost = 2</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="w-6 h-6 rounded-full bg-slate-600 text-white text-[10px] flex items-center justify-center font-bold">4</span>
+                                            <span className="font-semibold text-slate-700">Fuzzy Match (Gần đúng)</span>
+                                        </div>
+                                        <span className="font-mono bg-slate-200 text-slate-700 px-2 py-1 rounded text-sm font-bold">boost: 2</span>
                                     </div>
-                                    <div className="bg-white rounded-lg p-3 font-mono text-sm mb-2">
-                                        <span className="text-slate-600">điểm = BM25 × </span>
+                                    <div className="bg-white rounded-lg p-3 font-mono text-sm mb-2 border border-slate-200/50">
+                                        <span className="text-slate-600">score = BM25 × </span>
                                         <span className="text-slate-600 font-bold">2</span>
-                                        <span className="text-slate-600"> × (title×5 + body×1)</span>
+                                        <span className="text-slate-600"> × max(title×5, body×1)</span>
                                     </div>
                                     <p className="text-xs text-slate-500">
-                                        fuzziness="AUTO": cho phép sai 1-2 ký tự tùy độ dài từ
+                                        Xử lý lỗi gõ phím (fuzziness="AUTO"). Cho phép sai lệch 1-2 ký tự.
                                     </p>
                                 </div>
                             </div>
