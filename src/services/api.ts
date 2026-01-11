@@ -32,10 +32,114 @@ const handleResponse = async (res: Response) => {
     return res.json();
 };
 
-// 1️⃣ Search documents
+// 1️⃣ Search documents with Vietnamese-optimized algorithm
+// Priority: exact Vietnamese -> phrase match -> no accent -> fuzzy
 export const searchElastic = async (query: string, index?: string) => {
     try {
-        const url = index ? `${BASE_URL}/${index}/_search` : `${BASE_URL}/_search`;
+        const targetIndex = index || "news_quansu";
+        const url = `${BASE_URL}/${targetIndex}/_search`;
+
+        // Build Vietnamese-optimized search query
+        const shouldClauses = [];
+
+        if (query) {
+            // 1. Highest Priority: Exact Vietnamese match with accents (boost 10)
+            shouldClauses.push({
+                multi_match: {
+                    query: query,
+                    fields: ["title^5", "body"],
+                    type: "best_fields",
+                    operator: "or",
+                    boost: 10
+                }
+            });
+
+            // 2. High Priority: Phrase match with accents (boost 15)
+            shouldClauses.push({
+                multi_match: {
+                    query: query,
+                    fields: ["title^10", "body^2"],
+                    type: "phrase",
+                    slop: 2,
+                    boost: 15
+                }
+            });
+
+            // 3. Medium Priority: No-accent match (boost 7.5)
+            shouldClauses.push({
+                multi_match: {
+                    query: query,
+                    fields: ["title.no_accent^5", "body.no_accent"],
+                    type: "best_fields",
+                    operator: "or",
+                    boost: 7.5
+                }
+            });
+
+            // 4. Low Priority: Fuzzy match for typos (boost 2)
+            shouldClauses.push({
+                multi_match: {
+                    query: query,
+                    fields: ["title^5", "body"],
+                    type: "best_fields",
+                    fuzziness: "AUTO",
+                    operator: "or",
+                    boost: 2
+                }
+            });
+        }
+
+        const searchBody = {
+            query: {
+                bool: {
+                    must: query ? [{
+                        bool: {
+                            should: shouldClauses,
+                            minimum_should_match: 1
+                        }
+                    }] : [{ match_all: {} }]
+                }
+            },
+            size: 50,
+            sort: [
+                "_score",
+                { "publish_date": { order: "desc", unmapped_type: "date" } }
+            ],
+            highlight: {
+                fields: {
+                    title: {
+                        pre_tags: ["<mark>"],
+                        post_tags: ["</mark>"],
+                        number_of_fragments: 0
+                    },
+                    body: {
+                        pre_tags: ["<mark>"],
+                        post_tags: ["</mark>"],
+                        fragment_size: 150,
+                        number_of_fragments: 3
+                    }
+                }
+            }
+        };
+
+        const res = await fetch(url, {
+            method: "POST",
+            headers: getHeaders(),
+            body: JSON.stringify(searchBody),
+        });
+
+        const data = await handleResponse(res);
+        return data.hits?.hits || [];
+    } catch (error) {
+        console.error("searchElastic error:", error);
+        throw error;
+    }
+};
+
+// 1️⃣.1 Search with explanation (for understanding scoring)
+export const searchWithExplanation = async (query: string, docId: string, index: string) => {
+    try {
+        const url = `${BASE_URL}/${index}/_explain/${docId}`;
         const res = await fetch(url, {
             method: "POST",
             headers: getHeaders(),
@@ -43,19 +147,19 @@ export const searchElastic = async (query: string, index?: string) => {
                 query: {
                     multi_match: {
                         query: query,
-                        fields: ["*"], // Search across all fields
+                        fields: ["*"],
                         type: "best_fields",
-                        fuzziness: "AUTO" // Optional: handle typos
+                        // fuzziness: "AUTO"
                     },
                 },
             }),
         });
 
         const data = await handleResponse(res);
-        return data.hits?.hits || [];
+        return data;
     } catch (error) {
-        console.error("searchElastic error:", error);
-        throw error; // Re-throw to show in UI
+        console.error("searchWithExplanation error:", error);
+        throw error;
     }
 };
 

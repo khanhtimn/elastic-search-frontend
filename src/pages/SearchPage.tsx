@@ -6,11 +6,16 @@ import { searchElastic } from "../services/api";
 import { Search, AlertCircle, Sparkles } from "lucide-react";
 
 export default function SearchPage() {
-    const [results, setResults] = useState<any[]>([]);
+    const [results, setResults] = useState<Array<{
+        _index: string;
+        _id: string;
+        _score: number;
+        _source: Record<string, unknown>;
+        highlight?: Record<string, string[]>;
+    }>>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [hasSearched, setHasSearched] = useState(false);
-
     const [lastQuery, setLastQuery] = useState("");
 
     const handleSearch = async (query: string) => {
@@ -47,10 +52,10 @@ export default function SearchPage() {
                     <Sparkles className="w-6 h-6 text-primary-600" />
                 </div>
                 <h1 className="text-4xl md:text-5xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-900 to-slate-700">
-                    Tìm kiếm Tin tức chiến tranh
+                    Tìm kiếm Tin tức quân sự
                 </h1>
                 <p className="text-lg text-slate-500 max-w-2xl mx-auto">
-                    Tra cứu nhanh chóng toàn bộ dữ liệu Elasticsearch với bộ lọc mạnh mẽ và kết quả tức thì.
+                    Tìm kiếm thông minh với hỗ trợ tiếng Việt có dấu và không dấu.
                 </p>
 
                 <div className="flex justify-center pt-2">
@@ -77,7 +82,12 @@ export default function SearchPage() {
             {/* Results Section */}
             {hasSearched && !error && (
                 <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
-                    <ResultTable results={results} onRefresh={handleRefresh} loading={loading} />
+                    <ResultTable
+                        results={results}
+                        onRefresh={handleRefresh}
+                        loading={loading}
+                        query={lastQuery}
+                    />
                 </div>
             )}
 
