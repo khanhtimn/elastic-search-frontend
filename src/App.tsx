@@ -3,7 +3,7 @@ import Header from "./components/Header";
 import SearchPage from "./pages/SearchPage";
 import IndicesPage from "./pages/IndicesPage";
 import UploadPage from "./pages/UploadPage";
-import { ModalProvider, useModal } from "./contexts/ModalContext";
+import { useModal } from "./contexts/ModalContext";
 import ExplainModal from "./components/ExplainModal";
 import DocumentDetailModal from "./components/DocumentDetailModal";
 
@@ -53,7 +53,7 @@ export default function App() {
   }
 
   return (
-    <ModalProvider>
+    <>
       <div className="min-h-screen flex flex-col font-sans">
         <Header activeTab={activeTab} setActiveTab={setActiveTab} />
         <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -63,6 +63,6 @@ export default function App() {
 
       {/* Global Modals */}
       <ModalRenderer />
-    </ModalProvider>
+    </>
   );
 }

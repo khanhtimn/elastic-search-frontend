@@ -32,7 +32,7 @@ const handleResponse = async (res: Response) => {
     return res.json();
 };
 
-// 1️⃣ Search documents with Vietnamese-optimized algorithm
+// Search documents with Vietnamese-optimized algorithm
 // Priority: exact Vietnamese -> phrase match -> no accent -> fuzzy
 export interface SearchParams {
     query?: string;
@@ -185,6 +185,8 @@ export const searchElastic = async (params: SearchParams | string) => {
             }
         };
 
+        const queryLabel = typeof params === "string" ? params : params.query || "*";
+        console.time(`[Tổng cộng] API Search: ${queryLabel}`);
         const res = await fetch(url, {
             method: "POST",
             headers: getHeaders(),
@@ -192,6 +194,10 @@ export const searchElastic = async (params: SearchParams | string) => {
         });
 
         const data = await handleResponse(res);
+        if (data.took !== undefined) {
+            console.log(`[Elasticsearch] Thời gian xử lý của elastic search: ${data.took}ms`);
+        }
+        console.timeEnd(`[Tổng cộng] API Search: ${queryLabel}`);
         return {
             hits: data.hits?.hits || [],
             total: data.hits?.total?.value || 0,
@@ -203,12 +209,13 @@ export const searchElastic = async (params: SearchParams | string) => {
     }
 };
 
-// 1️⃣.1 Search with explanation (for understanding scoring)
+// Search with explanation (for understanding scoring)
 export const searchWithExplanation = async (params: SearchParams | string, docId: string, index: string) => {
     try {
         const url = `${BASE_URL}/${index}/_explain/${docId}`;
         const queryBody = buildSearchQuery(params);
 
+        console.time(`[Tổng cộng] API Explain: ${docId}`);
         const res = await fetch(url, {
             method: "POST",
             headers: getHeaders(),
@@ -218,6 +225,10 @@ export const searchWithExplanation = async (params: SearchParams | string, docId
         });
 
         const data = await handleResponse(res);
+        if (data.took !== undefined) {
+            console.log(`[Elasticsearch] Thời gian xử lý nội bộ (Explain): ${data.took}ms`);
+        }
+        console.timeEnd(`[Tổng cộng] API Explain: ${docId}`);
         return data;
     } catch (error) {
         console.error("searchWithExplanation error:", error);
@@ -225,7 +236,7 @@ export const searchWithExplanation = async (params: SearchParams | string, docId
     }
 };
 
-// 2️⃣ Get all indices
+// Get all indices
 export const getIndices = async (): Promise<string[]> => {
     try {
         const res = await fetch(`${BASE_URL}/_cat/indices?format=json`, {
@@ -242,7 +253,7 @@ export const getIndices = async (): Promise<string[]> => {
     }
 };
 
-// 3️⃣ Count all documents across cluster or in default index
+// Count all documents across cluster or in default index
 export const countDocuments = async (): Promise<number> => {
     try {
         const res = await fetch(`${BASE_URL}/_count`, {
@@ -257,7 +268,7 @@ export const countDocuments = async (): Promise<number> => {
     }
 };
 
-// 4️⃣ Index (create/update) document
+// Index (create/update) document
 // Supports two call forms:
 //  - indexDocument(index, id, doc)
 //  - indexDocument(id, doc) -> uses VITE_DEFAULT_INDEX or 'documents'
@@ -276,6 +287,9 @@ export const indexDocument = async (...args: any[]) => {
         doc = args[2];
     }
 
+    console.log("Indexing document:", index, id, doc);
+    return true;
+    /*
     try {
         const res = await fetch(`${BASE_URL}/${index}/_doc/${id}`, {
             method: "PUT",
@@ -289,9 +303,10 @@ export const indexDocument = async (...args: any[]) => {
         console.error("indexDocument error:", error);
         return false;
     }
+    */
 };
 
-// 5️⃣ Delete document
+// Delete document
 export const deleteDocument = async (index: string, id: string) => {
     console.log("Deleting document:", index, id);
     // try {
@@ -307,32 +322,34 @@ export const deleteDocument = async (index: string, id: string) => {
     // }
 };
 
-// 6️⃣ Create a new index
+// Create a new index
 export const createIndex = async (
     index: string,
     settings?: Record<string, any>,
     mappings?: Record<string, any>
 ): Promise<boolean> => {
-    try {
-        const body: Record<string, any> = {};
-        if (settings) body.settings = settings;
-        if (mappings) body.mappings = mappings;
+    console.log("Creating index:", index, settings, mappings);
+    return true;
+    // try {
+    //     const body: Record<string, any> = {};
+    //     if (settings) body.settings = settings;
+    //     if (mappings) body.mappings = mappings;
 
-        const res = await fetch(`${BASE_URL}/${index}`, {
-            method: "PUT",
-            headers: getHeaders(),
-            body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
-        });
+    //     const res = await fetch(`${BASE_URL}/${index}`, {
+    //         method: "PUT",
+    //         headers: getHeaders(),
+    //         body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
+    //     });
 
-        await handleResponse(res);
-        return true;
-    } catch (error) {
-        console.error("createIndex error:", error);
-        return false;
-    }
+    //     await handleResponse(res);
+    //     return true;
+    // } catch (error) {
+    //     console.error("createIndex error:", error);
+    //     return false;
+    // }
 };
 
-// 7️⃣ Delete an index
+// Delete an index
 export const deleteIndex = async (index: string): Promise<boolean> => {
     console.log("Deleting index:", index);
     return true;
@@ -349,7 +366,7 @@ export const deleteIndex = async (index: string): Promise<boolean> => {
     // }
 };
 
-// 8️⃣ Get index details
+// Get index details
 export const getIndexDetails = async (index: string): Promise<any> => {
     try {
         const res = await fetch(`${BASE_URL}/${index}`, {
@@ -364,9 +381,10 @@ export const getIndexDetails = async (index: string): Promise<any> => {
     }
 };
 
-// 9️⃣ Get documents by index
+// Get documents by index
 export const getDocumentsByIndex = async (index: string) => {
     try {
+        console.time(`[Tổng cộng] API ListDocs: ${index}`);
         const res = await fetch(`${BASE_URL}/${index}/_search`, {
             method: "POST", // search uses POST
             headers: getHeaders(),
@@ -376,6 +394,10 @@ export const getDocumentsByIndex = async (index: string) => {
             })
         });
         const data = await handleResponse(res);
+        if (data.took !== undefined) {
+            console.log(`[Elasticsearch] Thời gian xử lý nội bộ (List): ${data.took}ms`);
+        }
+        console.timeEnd(`[Tổng cộng] API ListDocs: ${index}`);
         return data.hits?.hits || [];
     } catch (error) {
         console.error("getDocumentsByIndex error:", error);
@@ -383,42 +405,44 @@ export const getDocumentsByIndex = async (index: string) => {
     }
 };
 
-// 10️⃣ Bulk index documents (create/update multiple)
+// Bulk index documents (create/update multiple)
 export const bulkIndexDocuments = async (index: string, docs: any[]) => {
-    try {
-        // Transform to NDJSON format required by Elasticsearch _bulk API
-        // { "index": { "_index": "test", "_id": "1" } }
-        // { "field1": "value1" }
-        const bodyLines: string[] = [];
+    console.log("Bulk indexing documents:", index, docs);
+    return true;
+    // try {
+    //     // Transform to NDJSON format required by Elasticsearch _bulk API
+    //     // { "index": { "_index": "test", "_id": "1" } }
+    //     // { "field1": "value1" }
+    //     const bodyLines: string[] = [];
 
-        docs.forEach(doc => {
-            // Extract ID if present, otherwise let Elastic generate it
-            const action: any = { index: { _index: index } };
-            if (doc.id) {
-                action.index._id = doc.id;
-            } else if (doc._id) {
-                action.index._id = doc._id;
-            }
+    //     docs.forEach(doc => {
+    //         // Extract ID if present, otherwise let Elastic generate it
+    //         const action: any = { index: { _index: index } };
+    //         if (doc.id) {
+    //             action.index._id = doc.id;
+    //         } else if (doc._id) {
+    //             action.index._id = doc._id;
+    //         }
 
-            bodyLines.push(JSON.stringify(action));
-            bodyLines.push(JSON.stringify(doc));
-        });
+    //         bodyLines.push(JSON.stringify(action));
+    //         bodyLines.push(JSON.stringify(doc));
+    //     });
 
-        // NDJSON must end with a newline
-        bodyLines.push("");
-        const body = bodyLines.join("\n");
+    //     // NDJSON must end with a newline
+    //     bodyLines.push("");
+    //     const body = bodyLines.join("\n");
 
-        const res = await fetch(`${BASE_URL}/_bulk`, {
-            method: "POST",
-            headers: getHeaders("application/x-ndjson"),
-            body: body,
-        });
+    //     const res = await fetch(`${BASE_URL}/_bulk`, {
+    //         method: "POST",
+    //         headers: getHeaders("application/x-ndjson"),
+    //         body: body,
+    //     });
 
-        const data = await handleResponse(res);
-        return !data.errors; // Returns true if no errors
-    } catch (error) {
-        console.error("bulkIndexDocuments error:", error);
-        return false;
-    }
+    //     const data = await handleResponse(res);
+    //     return !data.errors; // Returns true if no errors
+    // } catch (error) {
+    //     console.error("bulkIndexDocuments error:", error);
+    //     return false;
+    // }
 };
 
