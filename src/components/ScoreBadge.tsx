@@ -52,7 +52,7 @@ export default function ScoreBadge({ score, maxScore = 10, onExplainClick }: Sco
             </div>
 
             {/* Explain button */}
-            {onExplainClick && (
+            {/* {onExplainClick && (
                 <button
                     onClick={onExplainClick}
                     className="p-1.5 text-slate-400 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-all duration-200"
@@ -60,7 +60,7 @@ export default function ScoreBadge({ score, maxScore = 10, onExplainClick }: Sco
                 >
                     <Info className="w-4 h-4" />
                 </button>
-            )}
+            )} */}
         </div>
     );
 }

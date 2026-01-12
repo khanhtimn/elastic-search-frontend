@@ -1,26 +1,28 @@
-const BASE_URL = (import.meta.env.VITE_ELASTIC_API || "http://localhost:9200").replace(/\/$/, "");
-const USERNAME = import.meta.env.VITE_ELASTIC_USERNAME;
-const PASSWORD = import.meta.env.VITE_ELASTIC_PASSWORD;
+const BASE_URL = (import.meta.env.VITE_ELASTIC_API || "http://localhost:9200").replace(/\/$/, ""); // Link kết nối API Elasticsearch
+const USERNAME = import.meta.env.VITE_ELASTIC_USERNAME; // Tài khoản đăng nhập Elasticsearch
+const PASSWORD = import.meta.env.VITE_ELASTIC_PASSWORD; // Mật khẩu đăng nhập Elasticsearch
 
 const getHeaders = (contentType = "application/json") => {
+    // contentType: Định dạng nội dung gửi đi (mặc định là json)
     const headers: Record<string, string> = {
         "Content-Type": contentType,
     };
     if (USERNAME && PASSWORD) {
-        headers["Authorization"] = "Basic " + btoa(USERNAME + ":" + PASSWORD);
+        headers["Authorization"] = "Basic " + btoa(USERNAME + ":" + PASSWORD); // Mã hóa Base64 cho Header
     }
     return headers;
 };
 
 // Helper to handle response errors
 const handleResponse = async (res: Response) => {
+    // res: Đối tượng phản hồi từ hàm fetch
     if (!res.ok) {
         const text = await res.text();
         let errorMessage = `Yêu cầu thất bại: ${res.status}`;
         try {
             const json = JSON.parse(text);
             if (json.error?.reason) {
-                errorMessage = json.error.reason;
+                errorMessage = json.error.reason; // Trích xuất thông báo lỗi từ Elasticsearch
             } else if (json.error) {
                 errorMessage = typeof json.error === "string" ? json.error : JSON.stringify(json.error);
             }
@@ -35,18 +37,19 @@ const handleResponse = async (res: Response) => {
 // Search documents with Vietnamese-optimized algorithm
 // Priority: exact Vietnamese -> phrase match -> no accent -> fuzzy
 export interface SearchParams {
-    query?: string;
-    index?: string;
-    source?: string;
-    category?: string;
-    fromDate?: string;
-    toDate?: string;
-    from?: number;
-    size?: number;
+    query?: string;    // Từ khóa tìm kiếm
+    index?: string;    // Tên index muốn search
+    source?: string;   // Lọc theo nguồn báo
+    category?: string; // Lọc theo danh mục tin
+    fromDate?: string; // Thời gian bắt đầu (YYYY-MM-DD)
+    toDate?: string;   // Thời gian kết thúc (YYYY-MM-DD)
+    from?: number;     // Vị trí bắt đầu lấy dữ liệu (để phân trang)
+    size?: number;     // Số lượng kết quả/trang
 }
 
 // Helper to build the Vietnamese-optimized search query
 const buildSearchQuery = (params: SearchParams | string) => {
+    // params: Đối tượng chứa thông tin search hoặc chuỗi từ khóa đơn giản
     let query = "";
     let source = "";
     let category = "";
@@ -144,10 +147,11 @@ const buildSearchQuery = (params: SearchParams | string) => {
 };
 
 export const searchElastic = async (params: SearchParams | string) => {
+    // params: Tham số search (query, filter, pagination...)
     try {
-        const index = typeof params === "string" ? "news_quansu" : (params.index || "news_quansu");
-        const from = typeof params === "string" ? 0 : (params.from || 0);
-        const size = typeof params === "string" ? 50 : (params.size || 50);
+        const index = typeof params === "string" ? "news_quansu" : (params.index || "news_quansu"); // Mặc định là index 'news_quansu'
+        const from = typeof params === "string" ? 0 : (params.from || 0); // Vị trí bắt đầu
+        const size = typeof params === "string" ? 50 : (params.size || 50); // Số lượng kết quả
 
         const url = `${BASE_URL}/${index}/_search`;
         const queryBody = buildSearchQuery(params);
@@ -211,6 +215,9 @@ export const searchElastic = async (params: SearchParams | string) => {
 
 // Search with explanation (for understanding scoring)
 export const searchWithExplanation = async (params: SearchParams | string, docId: string, index: string) => {
+    // params: Tham số search ban đầu để tái hiện context
+    // docId: ID của tài liệu cụ thể muốn giải thích
+    // index: Tên index chứa tài liệu đó
     try {
         const url = `${BASE_URL}/${index}/_explain/${docId}`;
         const queryBody = buildSearchQuery(params);
@@ -273,9 +280,10 @@ export const countDocuments = async (): Promise<number> => {
 //  - indexDocument(index, id, doc)
 //  - indexDocument(id, doc) -> uses VITE_DEFAULT_INDEX or 'documents'
 export const indexDocument = async (...args: any[]) => {
-    let index: string;
-    let id: string;
-    let doc: Record<string, any>;
+    // args: Mảng linh hoạt chứa index (tùy chọn), id và nội dung document
+    let index: string; // Tên index đích
+    let id: string;    // ID duy nhất của tài liệu
+    let doc: Record<string, any>; // Dữ liệu của tài liệu (object)
 
     if (args.length === 2) {
         id = args[0];
@@ -308,6 +316,8 @@ export const indexDocument = async (...args: any[]) => {
 
 // Delete document
 export const deleteDocument = async (index: string, id: string) => {
+    // index: Tên index chứa tài liệu
+    // id: ID tài liệu cần xóa
     console.log("Deleting document:", index, id);
     // try {
     //     const res = await fetch(`${BASE_URL}/${index}/_doc/${id}`, {
@@ -324,9 +334,9 @@ export const deleteDocument = async (index: string, id: string) => {
 
 // Create a new index
 export const createIndex = async (
-    index: string,
-    settings?: Record<string, any>,
-    mappings?: Record<string, any>
+    index: string,                   // Tên index mới cần tạo
+    settings?: Record<string, any>,  // Cài đặt kĩ thuật cho index (shards, phân tích từ...)
+    mappings?: Record<string, any>   // Định nghĩa kiểu dữ liệu cho từng cột (field)
 ): Promise<boolean> => {
     console.log("Creating index:", index, settings, mappings);
     return true;
@@ -351,6 +361,7 @@ export const createIndex = async (
 
 // Delete an index
 export const deleteIndex = async (index: string): Promise<boolean> => {
+    // index: Tên index muốn xóa hoàn toàn
     console.log("Deleting index:", index);
     return true;
     // try {
@@ -383,6 +394,7 @@ export const getIndexDetails = async (index: string): Promise<any> => {
 
 // Get documents by index
 export const getDocumentsByIndex = async (index: string) => {
+    // index: Tên index muốn lấy danh sách tài liệu mẫu
     try {
         console.time(`[Tổng cộng] API ListDocs: ${index}`);
         const res = await fetch(`${BASE_URL}/${index}/_search`, {
@@ -407,6 +419,8 @@ export const getDocumentsByIndex = async (index: string) => {
 
 // Bulk index documents (create/update multiple)
 export const bulkIndexDocuments = async (index: string, docs: any[]) => {
+    // index: Tên index đích
+    // docs: Mảng chứa nhiều tài liệu (objects) để thêm cùng lúc
     console.log("Bulk indexing documents:", index, docs);
     return true;
     // try {
